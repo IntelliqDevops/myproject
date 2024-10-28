@@ -1,0 +1,12 @@
+1 command
+2 shell
+3 user (name,password,uid,comment,shell,home)
+4 file (name,state,mode,owner,group)
+5 copy (src,dest,content,owner,group,mode)
+6 fetch (src,dest)
+7 apt (name,state,update_cache)
+8 service (name,state)
+9 git(repo,dest)
+10 get_url (url,dest)
+11 uri (url,status_code)
+12 replace (regexp,replace,path)

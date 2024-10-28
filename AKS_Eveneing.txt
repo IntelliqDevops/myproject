@@ -1,0 +1,232 @@
+Azure Disks - Introduction
+* Azure Disk Storage offers high-performance, highly durable block storage for our mission- and business-critical workloads
+* We can mount these volumes as devices on our Virtual Machines & Container instances.
+* Cost-effective storage
+* Built-in bursting capabilities to handle unexpected traffic and process batch jobs cost-effectively
+* Unmatched resiliency
+* 0 percent annual failure rate for consistent enterprise-grade durability
+* Seamless scalability
+* Dynamic scaling of disk performance on Ultra Disk Storage without disruption
+* Built-in security
+* Automatic encryption to help protect your data using Microsoft-managed keys or your own
+
+=======================================================================================
+kubect get sc
+
+Search for kubernete api reference
+search for storageclass api
+
+vim storage-class.yml
+
+vim storageclass.yml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: premium-retain-waitforconsumer
+provisioner: kubernetes.io/azure-disk
+parameters:
+  storageaccounttype: Premium_LRS
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+
+=======================================================================================
+Description of the above file
+=================================
+1. apiVersion: storage.k8s.io/v1
+Specifies the API version used for the StorageClass resource. This version, storage.k8s.io/v1, is standard for defining storage classes in Kubernetes.
+
+2. kind: StorageClass
+Defines the type of resource as StorageClass, which is used to dynamically provision storage volumes.
+
+3. metadata
+name: managed-premium-retain-sc
+Defines the name of the StorageClass. In this case, the name is managed-premium-retain-sc.
+
+4. provisioner: kubernetes.io/azure-disk
+Specifies the provisioner that Kubernetes will use to create volumes. Here, it uses kubernetes.io/azure-disk for Azure Disk.
+
+5. reclaimPolicy: Retain
+Reclaim Policy determines what happens to the volume after its associated PersistentVolumeClaim (PVC) is deleted.
+Retain: Keeps the storage resource even after the PVC is deleted. It allows manual handling of the resource, useful for cases where data retention is important.
+Default behavior is usually Delete, where the disk is deleted along with the PVC.
+
+6. volumeBindingMode: WaitForFirstConsumer
+This determines when the Persistent Volume is bound to a PersistentVolumeClaim.
+WaitForFirstConsumer: The volume is provisioned only when a pod using the PersistentVolumeClaim is scheduled. This improves scheduling and ensures the volume is created in the same zone as the consuming pod.
+The default mode is Immediate, which creates and binds the volume as soon as the PersistentVolumeClaim is created.
+
+7. allowVolumeExpansion: true
+This allows the resizing of Persistent Volumes. If set to true, users can expand their volumes based on their needs.
+
+8. parameters
+Contains specific parameters for the Azure Disk configuration:
+
+storageaccounttype: Premium_LRS
+
+Specifies the storage account type to use for the Azure Disk.
+Common values include:
+Standard_LRS: Standard Locally Redundant Storage.
+StandardSSD_LRS: Standard SSD-backed Locally Redundant Storage.
+Premium_LRS: Premium SSD-backed Locally Redundant Storage.
+PremiumV2_LRS: Premium SSD with improved performance over Premium_LRS.
+UltraSSD_LRS: High-performance storage for workloads requiring high throughput and IOPS.
+kind: managed
+
+This defines that the disk is managed by Azure (as opposed to unmanaged disks). Managed disks provide ease of management, scaling, and reliability.
+
+=================================================================================================
+
+
+vim pvc.yml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: premium-retain-waitforconsumer
+  resources:
+    requests:
+      storage: 5Gi
+
+
+vim mysql-deployment.yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: my-secret-pw
+        - name: MYSQL_DATABASE
+          value: mydatabase
+        - name: MYSQL_USER
+          value: myuser
+        - name: MYSQL_PASSWORD
+          value: mypassword
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: my-pvc
+
+
+vim mysql-service.yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  clusterIP: None
+  selector:
+    app: mysql
+  ports:
+  - protocol: TCP
+    port: 3306
+    targetPort: 3306
+
+vim adminer-deployment.yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adminer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: adminer
+  template:
+    metadata:
+      labels:
+        app: adminer
+    spec:
+      containers:
+      - name: adminer
+        image: adminer:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: ADMINER_DEFAULT_SERVER
+          value: mysql # MySQL service name to connect to
+
+
+vim adminer-service.yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: adminer
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: adminer
+
+======================================================================================= 
+
+Azure MySQL Database
+く
+* Features
+* Built-in high availability with no additional cost.
+* Predictable performance, using inclusive pay-as-you-go pricing.
+* Scale as needed within seconds.
+* Secured to protect sensitive data at-rest and in-motion.
+* Automatic backups and point-in-time-restore for up to 35 days.
+* Enterprise-grade security and compliance.
+
+======================================================================================
+Go to Azure Database for MySQL flexible servers -> akswebappdb201
+Settings -> Server Parameters
+Change require_secure_transport: OFF
+Click on Save
+=======================================================================
+
+
+To access the azure MySQL db from shell
+
+mysql -h mysql-11.mysql.database.azure.com
+ -u krishna -p
+
+
+To access from aks cluster
+kubectl run -it --image=mysql:8.0 mysql-client -- mysql -h mysql-11.mysql.database.azure.com -u krishna -p Intelliqit@123
+
+To access through an adminer app
+First create a service object
+vim service.yml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  type: ExternalName
+  externalName: akswebappdb.mysql.database.azure.com
+
+Here we use a new service object called External name which helps to connect to azure MySQL db
+The adminer deployment file along with its service file is used as it is
+
+
+=====================================================================================================
+
